@@ -4,7 +4,11 @@ import matplotlib.pyplot as plt
 
 def main():
     st.title("Put Option P/L Visualizer")
-    st.markdown("Plots the P/L of a put option in USD vs. token price.")
+
+    st.markdown("""
+    This app plots the **value (P/L) of a put option** in USD 
+    as the underlying token price (in USD) changes.
+    """)
 
     st.sidebar.header("Option Parameters")
     strike = st.sidebar.number_input("Strike Price (K)",
@@ -35,10 +39,11 @@ def main():
     S_max = st.sidebar.number_input("Max Token Price (USD)",
                                     key="put_price_max",  # <--- UNIQUE KEY
                                     min_value=0.01,
-                                    value=2.0 * strike,
+                                    value=200.0,
                                     step=1.0)
+
     if S_min >= S_max:
-        st.error("Min must be < Max.")
+        st.error("Min Token Price must be strictly less than Max Token Price.")
         return
 
     prices = np.linspace(S_min, S_max, 300)
@@ -53,8 +58,10 @@ def main():
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(prices, payoff, label="Put Option P/L", color="purple")
+
     ax.axvline(x=strike, color='red', linestyle='--', label=f'Strike = {strike}')
     ax.axhline(y=0, color='black', linewidth=1)
+
     ax.set_title("Put Option P/L vs. Token Price")
     ax.set_xlabel("Token Price in USD")
     ax.set_ylabel("Option Value in USD")
