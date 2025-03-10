@@ -1,131 +1,86 @@
-import streamlit as st
 import numpy as np
-import pandas as pd
-import altair as alt
+import matplotlib.pyplot as plt
+import math
 
-"""
-Uniswap v3 Concentrated Liquidity Impermanent Loss Demo
-"""
-
-def get_liquidity_for_50_50(p_upper):
+def uniswap_v3_value_unit(S, K, r):
     """
-    Given an upper bound p_upper > 1 (price of token0 in token1 terms),
-    solve for the lower bound p_lower so that depositing at price=1
-    results in a 50/50 dollar split between token0 and token1.
-
-    Also returns the liquidity L assuming we deposit 1 token0 + 1 token1.
+    Piecewise value function for ONE UNIT of Uniswap V3 liquidity
+    (denominated in token B, e.g., USDC).
     """
-    # pLower is determined by the condition that at P=1, the amounts of token0 and token1
-    # are equal (in units).  From the Uniswap v3 formulas:
-    #
-    #   amount0 = L * (sqrt(p_upper) - sqrt(P))        [P=1 => sqrt(P)=1]
-    #   amount1 = L * (1/sqrt(P) - 1/sqrt(p_lower))
-    # for a 50/50 “by dollar” deposit at P=1, we want amount0 = amount1.
-    # That implies:  sqrt(p_upper) - 1 = 1 - 1/sqrt(p_lower)
-    # => sqrt(p_upper) + 1/sqrt(p_lower) = 2
-    # => 1/sqrt(p_lower) = 2 - sqrt(p_upper)
-    # => p_lower = 1 / (2 - sqrt(p_upper))^2
-
-    sqrt_p_upper = np.sqrt(p_upper)
-    # Ensure we stay below 4 so (2 - sqrt_p_upper) stays positive
-    p_lower = 1.0 / (2.0 - sqrt_p_upper) ** 2
-
-    # Now we find L such that amount0 = 1 token of token0.
-    # amount0 = 1 => 1 = L * (sqrt_p_upper - 1)
-    L = 1.0 / (sqrt_p_upper - 1.0)
-
-    return p_lower, L
-
-def final_holdings_and_value(p, p_lower, p_upper, L):
-    """
-    Given a final price p and a Uniswap v3 position covering [p_lower, p_upper]
-    with liquidity L (all prices are token0 in terms of token1),
-    return (amount0, amount1, total_value_in_token1).
-
-    We measure "value" in units of token1 (e.g. USDC).
-    """
-    sqrt_p       = np.sqrt(p)
-    sqrt_p_lower = np.sqrt(p_lower)
-    sqrt_p_upper = np.sqrt(p_upper)
-
-    if p < p_lower:
-        # Entire position in token0
-        amount0 = L * (sqrt_p_upper - sqrt_p_lower)
-        amount1 = 0.0
-    elif p > p_upper:
-        # Entire position in token1
-        amount0 = 0.0
-        amount1 = L * (1.0/sqrt_p_lower - 1.0/sqrt_p_upper)
+    if S < (K / r):
+        # Below lower bound => fully in token A, worth S (B) per A.
+        return S
+    elif S > (K * r):
+        # Above upper bound => fully in token B, worth K.
+        return K
     else:
-        # Price is in range
-        amount0 = L * (sqrt_p_upper - sqrt_p)
-        amount1 = L * (1.0/sqrt_p - 1.0/sqrt_p_lower)
+        # Within the range => partial amounts of A and B.
+        return (2.0 * math.sqrt(S * K * r) - S - K) / (r - 1.0)
 
-    # Total value in terms of token1
-    total_value = amount0 * p + amount1
-    return amount0, amount1, total_value
-
-def impermanent_loss_v3(p, p_lower, p_upper, L):
+def plot_uniswap_v3_lp_value(S0, t_L, t_H, V0):
     """
-    Compare final value of the LP position vs. simply holding 1 token0 + 1 token1.
-    We deposited 1 of token0 + 1 of token1 originally, so "HODL" final value = p + 1.
-    Returns IL in % (negative => underperforming HODL).
+    Plots the total value of a Uniswap V3 LP position (in USDC)
+    as the token A price S changes.
+    
+    Arguments:
+        S0 : float
+            Current price (A in terms of B, e.g. A/USDC).
+        t_L : float
+            Lower price bound for the LP position.
+        t_H : float
+            Upper price bound for the LP position.
+        V0 : float
+            Total initial value of the LP at price S0 (in USDC).
     """
-    _, _, lp_value = final_holdings_and_value(p, p_lower, p_upper, L)
-    hold_value = p + 1.0  # if we simply held 1 token0 + 1 token1
-    return 100.0 * (lp_value - hold_value) / hold_value
+    
+    # 1) Compute K and r from t_L and t_H
+    K = math.sqrt(t_L * t_H)
+    r = math.sqrt(t_H / t_L)
+    
+    # 2) Compute the value of ONE UNIT of liquidity at S0
+    value_unit_at_S0 = uniswap_v3_value_unit(S0, K, r)
+    
+    if value_unit_at_S0 == 0:
+        raise ValueError("The 'unit' value at S0 is 0, cannot scale properly. "
+                         "Check your bounds vs. S0.")
+    
+    # 3) Compute the scaling factor to ensure we get total value = V0 at S0
+    alpha = V0 / value_unit_at_S0
+    
+    # 4) Create a range of prices around [t_L, t_H] for plotting
+    #    (You can adjust these multipliers for a different zoom level.)
+    price_min = 0.5 * t_L  # or max(1e-6, ...)
+    price_max = 1.5 * t_H
+    S_values = np.linspace(price_min, price_max, 200)
+    
+    # 5) Compute the scaled LP value for each price in S_values
+    lp_values = [alpha * uniswap_v3_value_unit(S, K, r) for S in S_values]
+    
+    # 6) Plot
+    plt.figure(figsize=(8, 5))
+    plt.plot(S_values, lp_values, label='LP Value')
+    
+    # Mark your chosen bounds as vertical lines
+    plt.axvline(x=t_L, color='red', linestyle='--', label='Lower Bound (t_L)')
+    plt.axvline(x=t_H, color='green', linestyle='--', label='Upper Bound (t_H)')
+    plt.axvline(x=S0, color='blue', linestyle=':', label='Starting Price (S0)')
+    
+    plt.title("Uniswap V3 LP Value vs. Price")
+    plt.xlabel("Price of Token A in USDC (S)")
+    plt.ylabel("LP Value in USDC")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-def main():
-    st.title("Uniswap v3 Concentrated Liquidity IL Demo (50/50 at P=1)")
-
-    st.markdown("""
-    This app shows how impermanent loss behaves for a **concentrated liquidity**  
-    position (Uniswap v3 style) when you set a lower and upper price bound  
-    such that your initial deposit is 50/50 by dollar value at price = 1.  
-    (Imagine 1 ETH = 1 USDC for simplicity.)
-
-    - **pUpper**: Upper bound on the price of token0 in token1 terms.  
-      We solve for **pLower** automatically so that at P=1, half your  
-      capital is in token0 and half in token1.
-    - We deposit exactly 1 token0 and 1 token1 at P=1 (total $2).  
-    - Then we track the final value of your LP vs. simply _holding_ those  
-      1 token0 + 1 token1 as price changes from below 0.2× up to 5×.
-    """)
-
-    p_upper = st.slider("Pick pUpper (must be < 4 so 50/50 is possible)", 
-                        min_value=1.01, max_value=3.99, value=2.0, step=0.01)
-    p_lower, L = get_liquidity_for_50_50(p_upper)
-
-    st.write(f"**Computed pLower** = {p_lower:.4f}")
-    st.write(f"**Liquidity L**     = {L:.4f}")
-
-    # Range of final prices to plot
-    prices = np.linspace(0.2, 5.0, 200)
-    il_list = [impermanent_loss_v3(p, p_lower, p_upper, L) for p in prices]
-
-    df = pd.DataFrame({
-        "Final Price (token0 in token1)": prices,
-        "Impermanent Loss (%)": il_list
-    })
-
-    chart = (
-        alt.Chart(df)
-        .mark_line(color="red", strokeWidth=3)
-        .encode(
-            x=alt.X("Final Price (token0 in token1)", title="Final Price (P)"),
-            y=alt.Y("Impermanent Loss (%)", title="IL vs. Just Holding ( % )")
-        )
-        .properties(width=700, height=400)
-    )
-    st.altair_chart(chart, use_container_width=True)
-
-    st.markdown("""
-    **Interpretation**  
-    - If the final price leaves your [pLower, pUpper] range, you end up  
-      holding effectively all one token (whichever side you'd be "pushed" into).  
-    - Within the range, you hold some of each.  
-    - The red line shows how your final LP value compares to holding 1 token0 + 1 token1.
-    """)
-
+# -----------------------------
+# Example usage:
 if __name__ == "__main__":
-    main()
+    # Suppose you start at price S0=100 USDC per A,
+    # pick a lower bound t_L=80 and upper bound t_H=120,
+    # and deposit V0=10_000 USDC worth of liquidity.
+    S0_example = 100
+    t_L_example = 80
+    t_H_example = 120
+    V0_example = 10_000
+    
+    plot_uniswap_v3_lp_value(S0_example, t_L_example, t_H_example, V0_example)
