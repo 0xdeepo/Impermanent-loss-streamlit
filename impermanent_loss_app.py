@@ -1,3 +1,4 @@
+import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -17,70 +18,97 @@ def uniswap_v3_value_unit(S, K, r):
         # Within the range => partial amounts of A and B.
         return (2.0 * math.sqrt(S * K * r) - S - K) / (r - 1.0)
 
-def plot_uniswap_v3_lp_value(S0, t_L, t_H, V0):
-    """
-    Plots the total value of a Uniswap V3 LP position (in USDC)
-    as the token A price S changes.
-    
-    Arguments:
-        S0 : float
-            Current price (A in terms of B, e.g. A/USDC).
-        t_L : float
-            Lower price bound for the LP position.
-        t_H : float
-            Upper price bound for the LP position.
-        V0 : float
-            Total initial value of the LP at price S0 (in USDC).
-    """
-    
-    # 1) Compute K and r from t_L and t_H
+def main():
+    st.title("Uniswap V3 LP Value Visualizer")
+
+    st.markdown("""
+    This app plots the value (in USDC) of a Uniswap V3 LP position 
+    as the price of Token A (in USDC) changes.
+    """)
+
+    # --- User Inputs ---
+    st.sidebar.header("Input Parameters")
+
+    # 1) Starting price: S0
+    S0 = st.sidebar.number_input(
+        "Starting Price (S0) of Token A in USDC",
+        min_value=0.0001,
+        value=100.0,
+        step=1.0
+    )
+
+    # 2) Lower Bound: t_L
+    t_L = st.sidebar.number_input(
+        "Lower Bound (t_L)",
+        min_value=0.0001,
+        value=80.0,
+        step=1.0
+    )
+
+    # 3) Upper Bound: t_H
+    t_H = st.sidebar.number_input(
+        "Upper Bound (t_H)",
+        min_value=0.0001,
+        value=120.0,
+        step=1.0
+    )
+
+    # 4) LP Total Value: V0
+    V0 = st.sidebar.number_input(
+        "LP Total Value (V0) in USDC at S0",
+        min_value=1.0,
+        value=10000.0,
+        step=100.0
+    )
+
+    # Ensure t_L < t_H
+    if t_L >= t_H:
+        st.error("Lower bound (t_L) must be strictly less than upper bound (t_H).")
+        return
+
+    # Calculate K and r
     K = math.sqrt(t_L * t_H)
     r = math.sqrt(t_H / t_L)
-    
-    # 2) Compute the value of ONE UNIT of liquidity at S0
-    value_unit_at_S0 = uniswap_v3_value_unit(S0, K, r)
-    
-    if value_unit_at_S0 == 0:
-        raise ValueError("The 'unit' value at S0 is 0, cannot scale properly. "
-                         "Check your bounds vs. S0.")
-    
-    # 3) Compute the scaling factor to ensure we get total value = V0 at S0
-    alpha = V0 / value_unit_at_S0
-    
-    # 4) Create a range of prices around [t_L, t_H] for plotting
-    #    (You can adjust these multipliers for a different zoom level.)
-    price_min = 0.5 * t_L  # or max(1e-6, ...)
-    price_max = 1.5 * t_H
-    S_values = np.linspace(price_min, price_max, 200)
-    
-    # 5) Compute the scaled LP value for each price in S_values
-    lp_values = [alpha * uniswap_v3_value_unit(S, K, r) for S in S_values]
-    
-    # 6) Plot
-    plt.figure(figsize=(8, 5))
-    plt.plot(S_values, lp_values, label='LP Value')
-    
-    # Mark your chosen bounds as vertical lines
-    plt.axvline(x=t_L, color='red', linestyle='--', label='Lower Bound (t_L)')
-    plt.axvline(x=t_H, color='green', linestyle='--', label='Upper Bound (t_H)')
-    plt.axvline(x=S0, color='blue', linestyle=':', label='Starting Price (S0)')
-    
-    plt.title("Uniswap V3 LP Value vs. Price")
-    plt.xlabel("Price of Token A in USDC (S)")
-    plt.ylabel("LP Value in USDC")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
 
-# -----------------------------
-# Example usage:
-if __name__ == "__main__":
-    # Suppose you start at price S0=100 USDC per A,
-    # pick a lower bound t_L=80 and upper bound t_H=120,
-    # and deposit V0=10_000 USDC worth of liquidity.
-    S0_example = 100
-    t_L_example = 80
-    t_H_example = 120
-    V0_example = 10_000
+    # Value of ONE UNIT of liquidity at S0:
+    value_unit_at_S0 = uniswap_v3_value_unit(S0, K, r)
+    if value_unit_at_S0 == 0:
+        st.error("The unit value at S0 is 0. Check bounds vs. S0.")
+        return
     
-    plot_uniswap_v3_lp_value(S0_example, t_L_example, t_H_example, V0_example)
+    # Scaling factor
+    alpha = V0 / value_unit_at_S0
+
+    # --- Price Range for Plotting ---
+    # By default, let’s show ±50% around the bounds for a nice visual range.
+    price_min = 0.5 * t_L
+    price_max = 1.5 * t_H
+    # In case S0 is outside those multipliers, adjust the range:
+    price_min = min(price_min, S0 * 0.5)
+    price_max = max(price_max, S0 * 1.5)
+
+    # Generate prices
+    S_values = np.linspace(price_min, price_max, 300)
+
+    # Compute scaled LP value
+    lp_values = [alpha * uniswap_v3_value_unit(S, K, r) for S in S_values]
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(S_values, lp_values, label="LP Value", color="blue")
+
+    # Draw vertical lines for t_L, t_H, and S0
+    ax.axvline(x=t_L, color='red', linestyle='--', label='t_L')
+    ax.axvline(x=t_H, color='green', linestyle='--', label='t_H')
+    ax.axvline(x=S0, color='orange', linestyle=':', label='S0')
+
+    ax.set_title("Uniswap V3 LP Value vs. Price of Token A (in USDC)")
+    ax.set_xlabel("Price of Token A in USDC (S)")
+    ax.set_ylabel("LP Value in USDC")
+    ax.legend()
+    ax.grid(True)
+
+    st.pyplot(fig)
+
+if __name__ == "__main__":
+    main()
