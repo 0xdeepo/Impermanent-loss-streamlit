@@ -91,10 +91,11 @@ def main():
                                     min_value=0.0)
 
     st.sidebar.subheader("Plot Range for Underlying Price")
+    # Key update: Avoid S=0 by setting min_value=0.01, default=1.0
     S_min = st.sidebar.number_input("Min Token Price (USD)",
                                     key="put_price_min_bs",
-                                    min_value=0.0,
-                                    value=0.0,
+                                    min_value=0.01,
+                                    value=1.0,
                                     step=1.0)
     S_max = st.sidebar.number_input("Max Token Price (USD)",
                                     key="put_price_max_bs",
