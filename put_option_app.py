@@ -1,74 +1,70 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
+import math
+from math import log, sqrt
+from statistics import NormalDist
 
+###############################################################################
+# Black–Scholes functions (r=0 for simplicity, no dividends)
+###############################################################################
+def bs_put_price(S, K, T, sigma):
+    """
+    Black–Scholes price for a European put option (r=0).
+    S     : underlying price
+    K     : strike
+    T     : time to expiration (in years)
+    sigma : volatility (decimal)
+    """
+    # Handle the case T=0 or near 0 => purely intrinsic
+    if T <= 1e-10:
+        return max(K - S, 0)
+
+    d1 = (math.log(S/K) + 0.5 * sigma**2 * T) / (sigma * math.sqrt(T))
+    d2 = d1 - sigma * math.sqrt(T)
+
+    # N(x) is the CDF of the standard normal distribution
+    N = NormalDist(0, 1).cdf
+
+    # For r=0, discount factor exp(-rT) = 1
+    put_value = K * N(-d2) - S * N(-d1)
+    return put_value
+
+def bs_put_delta(S, K, T, sigma):
+    """
+    Delta of a European put under Black–Scholes (r=0).
+    This is dV/dS for the put.
+    """
+    if T <= 1e-10:
+        # At T=0, payoff is intrinsic => delta is -1 if S<K, else 0
+        return -1.0 if S < K else 0.0
+
+    # Same d1 as above
+    d1 = (math.log(S/K) + 0.5 * sigma**2 * T) / (sigma * math.sqrt(T))
+    N = NormalDist(0, 1).cdf
+
+    # Put delta = N(d1) - 1
+    return N(d1) - 1.0
+
+###############################################################################
+# Main Streamlit app
+###############################################################################
 def main():
-    st.title("Put Option P/L Visualizer")
+    st.title("Put Option: Intrinsic Value, Theoretical Value, PNL, and Delta")
 
     st.markdown("""
-    This app plots the **value (P/L) of a put option** in USD 
-    as the underlying token price (in USD) changes.
+    This script shows four plots on a single chart:
+    1. **Intrinsic Value**: \\(\\max(K - S, 0)\\)  
+    2. **Theoretical Value (Black–Scholes)**: A smooth curve accounting for volatility and time.  
+    3. **PNL**: If you **buy**, \\(\\mathrm{PNL}(S) = [\\text{BS\_put}(S) - \\text{premium}]\\times \\text{quantity}\\).  
+       If you **sell**, \\(\\mathrm{PNL}(S) = [\\text{premium} - \\text{BS\_put}(S)]\\times \\text{quantity}\\).  
+    4. **Delta**: The option's sensitivity to \\(S\\), plotted on a second (right) Y-axis.
     """)
 
     st.sidebar.header("Option Parameters")
+
     strike = st.sidebar.number_input("Strike Price (K)",
-                                     key="put_strike",  # <--- UNIQUE KEY
+                                     key="put_strike_bs",
                                      value=100.0,
                                      step=1.0,
-                                     min_value=0.01)
-    premium = st.sidebar.number_input("Premium (USD per contract)",
-                                      key="put_premium",  # <--- UNIQUE KEY
-                                      value=5.0,
-                                      step=0.1,
-                                      min_value=0.0)
-    quantity = st.sidebar.number_input("Quantity (contracts)",
-                                       key="put_qty",  # <--- UNIQUE KEY
-                                       value=1.0,
-                                       step=1.0,
-                                       min_value=1.0)
-    position_type = st.sidebar.selectbox("Position Type",
-                                         ("Buy", "Sell"),
-                                         key="put_position_type")  # <--- UNIQUE KEY
-
-    st.sidebar.subheader("Plot Range for Token Price")
-    S_min = st.sidebar.number_input("Min Token Price (USD)",
-                                    key="put_price_min",  # <--- UNIQUE KEY
-                                    min_value=0.0,
-                                    value=0.0,
-                                    step=1.0)
-    S_max = st.sidebar.number_input("Max Token Price (USD)",
-                                    key="put_price_max",  # <--- UNIQUE KEY
-                                    min_value=0.01,
-                                    value=200.0,
-                                    step=1.0)
-
-    if S_min >= S_max:
-        st.error("Min Token Price must be strictly less than Max Token Price.")
-        return
-
-    prices = np.linspace(S_min, S_max, 300)
-    payoff = []
-    for S in prices:
-        intrinsic = max(strike - S, 0.0)
-        if position_type == "Buy":
-            pl = intrinsic - premium
-        else:
-            pl = premium - intrinsic
-        payoff.append(pl * quantity)
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(prices, payoff, label="Put Option P/L", color="purple")
-
-    ax.axvline(x=strike, color='red', linestyle='--', label=f'Strike = {strike}')
-    ax.axhline(y=0, color='black', linewidth=1)
-
-    ax.set_title("Put Option P/L vs. Token Price")
-    ax.set_xlabel("Token Price in USD")
-    ax.set_ylabel("Option Value in USD")
-    ax.grid(True)
-    ax.legend()
-
-    st.pyplot(fig)
-
-if __name__ == "__main__":
-    main()
+                                     min_value=0.
