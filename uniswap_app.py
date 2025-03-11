@@ -18,20 +18,21 @@ def plot_uniswap_v3_lp_value(S0, t_L, t_H, V0):
     if value_unit_at_S0 == 0:
         st.error("The 'unit' value at S0 is 0, cannot scale properly. Check your bounds vs. S0.")
         return
+
     alpha = V0 / value_unit_at_S0
 
     price_min = st.sidebar.number_input(
         "Min Token Price (USD)",
-        key="uni_price_min",  # <--- UNIQUE KEY
-        min_value=0.0,
-        value=float(t_L / 2),
+        key="uni_price_min",
+        min_value=0.01,           # Avoid zero or negative
+        value=float(t_L / 2) if t_L > 0 else 1.0,
         step=1.0
     )
     price_max = st.sidebar.number_input(
         "Max Token Price (USD)",
-        key="uni_price_max",  # <--- UNIQUE KEY
+        key="uni_price_max",
         min_value=0.01,
-        value=float(t_H * 1.5),
+        value=float(t_H * 1.5) if t_H > 0 else 200.0,
         step=1.0
     )
 
@@ -66,34 +67,33 @@ def main():
 
     st.sidebar.header("Input Parameters")
 
-    # Note each widget has a unique "key"
     S0 = st.sidebar.number_input(
         "Starting Price (S0) of Token A in USD",
-        key="uni_S0",  # <--- UNIQUE KEY
-        min_value=0.0001,
+        key="uni_S0",
+        min_value=0.01,
         value=100.0,
         step=1.0
     )
 
     t_L = st.sidebar.number_input(
         "Lower Bound (t_L)",
-        key="uni_tL",  # <--- UNIQUE KEY
-        min_value=0.0001,
+        key="uni_tL",
+        min_value=0.01,
         value=80.0,
         step=1.0
     )
 
     t_H = st.sidebar.number_input(
         "Upper Bound (t_H)",
-        key="uni_tH",  # <--- UNIQUE KEY
-        min_value=0.0001,
+        key="uni_tH",
+        min_value=0.01,
         value=120.0,
         step=1.0
     )
 
     V0 = st.sidebar.number_input(
         "LP Total Value (V0) in USD at S0",
-        key="uni_V0",  # <--- UNIQUE KEY
+        key="uni_V0",
         min_value=1.0,
         value=10000.0,
         step=100.0
