@@ -3,9 +3,6 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-###############################################################################
-# Utility functions for computing LP value and Put value
-###############################################################################
 def uniswap_v3_value_unit(S, K, r):
     if S < (K / r):
         return S
@@ -23,85 +20,78 @@ def uniswap_lp_value(S, S0, t_L, t_H, V0):
     alpha = V0 / value_unit_at_S0
     return alpha * uniswap_v3_value_unit(S, K, r)
 
-def put_option_value(S, strike, premium, quantity, position_type):
+def put_option_expiry_payoff(S, strike, premium, quantity, position_type):
+    """
+    Simple payoff at expiration:
+      Buy put => payoff = (max(K-S,0) - premium) * quantity
+      Sell put => payoff = (premium - max(K-S,0)) * quantity
+    """
     intrinsic = max(strike - S, 0.0)
     if position_type == "Buy":
-        pl = intrinsic - premium
+        return (intrinsic - premium) * quantity
     else:
-        pl = premium - intrinsic
-    return pl * quantity
+        return (premium - intrinsic) * quantity
 
-###############################################################################
-# MAIN SCRIPT: reads previous inputs from st.session_state, no new widgets
-###############################################################################
 def main():
     st.title("Combined LP + Put Option Value Curve")
     st.markdown("""
-    This chart **reuses** the inputs from the Uniswap LP app and the Put Option app,
-    and plots the combined payoff (LP + Put) without asking for inputs again.
+    This chart reuses the inputs from:
+    - **Uniswap LP App** (S0, tL, tH, V0, plus the min/max price)
+    - **Put Option App** (strike, premium, quantity, position type, plus min/max price)
+
+    Then plots their **combined payoff** at expiration, 
+    without re-asking for parameters.
     """)
 
-    # --- Retrieve Uniswap LP parameters from session_state ---
-    # Make sure these match the keys in uniswap_app.py
+    # Retrieve Uniswap LP params from st.session_state
     S0 = st.session_state["uni_S0"]
     t_L = st.session_state["uni_tL"]
     t_H = st.session_state["uni_tH"]
     V0 = st.session_state["uni_V0"]
-    
-    # We'll also retrieve the Uniswap's chosen min/max price (if you prefer to use them)
+
+    # Uniswap's chosen price range
     uni_price_min = st.session_state["uni_price_min"]
     uni_price_max = st.session_state["uni_price_max"]
 
-    # --- Retrieve Put Option parameters from session_state ---
-    strike = st.session_state["put_strike"]
-    premium = st.session_state["put_premium"]
-    quantity = st.session_state["put_qty"]
-    position_type = st.session_state["put_position_type"]
-    
-    # The put app also defines its own min/max
-    put_price_min = st.session_state["put_price_min"]
-    put_price_max = st.session_state["put_price_max"]
+    # Retrieve Put params from st.session_state
+    strike = st.session_state["put_strike_bs"]
+    premium = st.session_state["put_premium_bs"]
+    quantity = st.session_state["put_qty_bs"]
+    position_type = st.session_state["put_position_type_bs"]
 
-    # --- Decide on a single price range for the combined chart ---
-    # For example, let's unify by taking the min of both mins and the max of both maxes:
+    # Put's chosen price range
+    put_price_min = st.session_state["put_price_min_bs"]
+    put_price_max = st.session_state["put_price_max_bs"]
+
+    # Combine the ranges
     price_min = min(uni_price_min, put_price_min)
     price_max = max(uni_price_max, put_price_max)
-    
+
     if price_min >= price_max:
-        st.error("Combined: The selected price ranges are invalid (min >= max).")
+        st.error("Combined: Price range is invalid (min >= max).")
         return
 
-    # Generate price range
-    S_values = np.linspace(price_min, price_max, 400)
-    
-    # Calculate each curve
+    # Build the combined price array
+    S_values = np.linspace(price_min, price_max, 300)
+
     lp_vals = []
     put_vals = []
     combined_vals = []
 
     for S in S_values:
         lp_v = uniswap_lp_value(S, S0, t_L, t_H, V0)
-        put_v = put_option_value(S, strike, premium, quantity, position_type)
+        put_v = put_option_expiry_payoff(S, strike, premium, quantity, position_type)
         lp_vals.append(lp_v)
         put_vals.append(put_v)
         combined_vals.append(lp_v + put_v)
 
-    # --- Plot ---
+    # Plot
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(S_values, lp_vals, label="LP Value", color="blue")
-    ax.plot(S_values, put_vals, label="Put Value", color="purple")
+    ax.plot(S_values, put_vals, label="Put Value (Payoff)", color="purple")
     ax.plot(S_values, combined_vals, label="LP + Put", color="green", linewidth=2)
-    
-    # Mark the strike
+
     ax.axvline(x=strike, color="red", linestyle="--", label=f"Strike={strike}")
     ax.axhline(y=0, color="black", linewidth=1)
-    ax.set_title("LP + Put Option Combined Value Curve")
-    ax.set_xlabel("Token Price in USD")
-    ax.set_ylabel("Value in USD")
-    ax.grid(True)
-    ax.legend()
-
-    st.pyplot(fig)
-
-if __name__ == "__main__":
-    main()
+    ax.set_title("Combined: Uniswap LP + Put Payoff")
+    ax.set_xlabel
