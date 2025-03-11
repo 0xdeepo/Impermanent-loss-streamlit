@@ -26,7 +26,7 @@ def bs_put_price(S, K, T, sigma):
     # N(x) is the CDF of the standard normal distribution
     N = NormalDist(0, 1).cdf
 
-    # For r=0, discount factor exp(-rT) = 1
+    # For r=0, discount factor = 1
     put_value = K * N(-d2) - S * N(-d1)
     return put_value
 
@@ -41,7 +41,6 @@ def bs_put_delta(S, K, T, sigma):
 
     d1 = (math.log(S/K) + 0.5 * sigma**2 * T) / (sigma * math.sqrt(T))
     N = NormalDist(0, 1).cdf
-
     # Put delta = N(d1) - 1
     return N(d1) - 1.0
 
@@ -91,7 +90,7 @@ def main():
                                     min_value=0.0)
 
     st.sidebar.subheader("Plot Range for Underlying Price")
-    # Key update: Avoid S=0 by setting min_value=0.01, default=1.0
+    # Avoid S=0 => set min_value=0.01
     S_min = st.sidebar.number_input("Min Token Price (USD)",
                                     key="put_price_min_bs",
                                     min_value=0.01,
@@ -148,6 +147,7 @@ def main():
     ax2.plot(prices, deltas, color="orange", label="Delta")
     ax2.set_ylabel("Delta")
 
+    # Merge legends
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
